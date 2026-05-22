@@ -1,0 +1,19 @@
+# venv
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# build artifacts
+dist/
+build/
+*.egg-info/
+
+# the data and outputs
+output/
+photos/
+
+# editors
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fb-extract-photos"
+version = "0.1.0"
+description = "Extract photos/videos/GIFs you sent or uploaded from a Facebook data dump, restore EXIF timestamps, and dedupe by perceptual hash."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Angel" }]
+keywords = ["facebook", "exif", "photos", "messenger", "dedup", "perceptual-hash"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "Pillow>=10.0",
+    "ImageHash>=4.3",
+]
+
+[project.scripts]
+fb-extract-photos = "extract_photos:main"
+
+[project.urls]
+Homepage = "https://github.com/jerji/fb-extract-photos"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["extract_photos.py"]
+
+[tool.hatch.build.targets.sdist]
+include = ["extract_photos.py", "README.md", "pyproject.toml"]
