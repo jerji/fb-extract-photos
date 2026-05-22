@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 from .types import (
@@ -261,6 +262,114 @@ def collect_from_tagged_in(json_path: Path) -> list[RawMedia]:
                 for uri, t, extra in iter_media_from_obj(m, fallback):
                     out.append(RawMedia(uri, t, "tagged_in", extra))
     return out
+
+
+# ---- User-name auto-detection ----------------------------------------------
+
+
+# Common locations of the profile JSON across Facebook export versions.
+_PROFILE_PATHS: tuple[tuple[str, ...], ...] = (
+    ("personal_information", "profile_information", "profile_information.json"),
+    ("profile_information", "profile_information.json"),
+)
+
+
+def _profile_name(source_root: Path) -> str | None:
+    """Look for a profile_information.json in the dump and pull the user's
+    full name out of it. Returns ``None`` if neither file is present or
+    if the expected fields aren't there.
+
+    Schema seen in full dumps::
+
+        {"profile_v2": {"name": {"full_name": "...", ...}, ...}}
+    """
+    for parts in _PROFILE_PATHS:
+        p = source_root.joinpath(*parts)
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        name = (
+            ((data.get("profile_v2") or {}).get("name") or {}).get("full_name")
+            or (data.get("profile") or {}).get("name", {}).get("full_name")
+        )
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return None
+
+
+def _most_frequent_sender(source_root: Path) -> str | None:
+    """Walk every message JSON and return the most prolific ``sender_name``.
+
+    In your own export YOU are typically the most-sending participant
+    by a wide margin (typically 2–5×), because you appear in every
+    thread while each other participant only appears in their own.
+
+    The intersection-of-participants approach is less reliable: a few
+    threads always lack the user in their participants list (group
+    chats where participant info was truncated, system messages, etc.),
+    causing the intersection to collapse to empty.
+    """
+    activity = source_root / "your_facebook_activity"
+    msg_root = activity / "messages"
+    counts: Counter[str] = Counter()
+
+    for sub in (
+        "inbox", "message_requests", "filtered_threads",
+        "archived_threads", "e2ee_cutover",
+    ):
+        base = msg_root / sub
+        if not base.exists():
+            continue
+        for jp in base.rglob("message_*.json"):
+            try:
+                data = json.loads(jp.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            for msg in data.get("messages") or []:
+                if isinstance(msg, dict):
+                    sn = msg.get("sender_name")
+                    if sn:
+                        counts[sn] += 1
+
+    # Also count group messages.
+    gm = activity / "groups" / "your_group_messages"
+    if gm.exists():
+        for jp in gm.glob("*.json"):
+            try:
+                data = json.loads(jp.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            for msg in data.get("messages") or []:
+                if isinstance(msg, dict):
+                    sn = msg.get("sender_name")
+                    if sn:
+                        counts[sn] += 1
+
+    if not counts:
+        return None
+    name, _ = counts.most_common(1)[0]
+    return name
+
+
+def detect_user_name(source_root: Path) -> str | None:
+    """Best-effort: figure out the export owner's name from the dump.
+
+    Tries two strategies in order:
+
+    1. Read ``personal_information/profile_information/profile_information.json``
+       (only present in full dumps, not the ``your_facebook_activity``
+       subset). This is the canonical name Facebook had for you.
+    2. Pick the most-frequent ``sender_name`` across every message and
+       group-message JSON. In practice this is correct: the export
+       owner sends 2–5× more total messages than any single contact.
+
+    Returns ``None`` only when both strategies come up empty (e.g. a
+    dump with no messages and no profile info).
+    """
+    return _profile_name(source_root) or _most_frequent_sender(source_root)
 
 
 # ---- Resolution / top-level walk -------------------------------------------

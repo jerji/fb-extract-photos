@@ -31,7 +31,7 @@ from . import __version__
 from .exif import ExifToolDaemon, build_exif_args
 from .hashing import dedupe, hash_refs
 from .output import load_manifest_keys, safe_dest
-from .scanners import gather_all
+from .scanners import detect_user_name, gather_all
 from .types import CACHE_NAME, MANIFEST_HEADERS, MANIFEST_NAME, MediaRef
 
 
@@ -50,9 +50,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                     help="Facebook dump root (default: ./output)")
     ap.add_argument("--output", type=Path, default=here / "photos",
                     help="Destination photo folder (default: ./photos)")
-    ap.add_argument("--user", default="Angel Ouellet",
-                    help='Your sender_name in messages JSON '
-                         '(default: "Angel Ouellet")')
+    ap.add_argument("--user", default=None,
+                    help="Your sender_name in messages JSON. "
+                         "Auto-detected from profile_information.json or "
+                         "the most-frequent sender if omitted.")
     ap.add_argument("--exiftool", default="exiftool",
                     help="Path to exiftool binary (default: PATH lookup)")
     ap.add_argument("--phash-size", type=int, default=8,
@@ -217,16 +218,29 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    user = args.user
+    user_source = "from --user"
+    if user is None:
+        user = detect_user_name(source)
+        user_source = "auto-detected"
+        if user is None:
+            print(
+                "error: could not auto-detect your name from the dump. "
+                "Pass --user 'Your Full Name' explicitly.",
+                file=sys.stderr,
+            )
+            return 1
+
     print(f"Source:   {source}")
     print(f"Output:   {output}")
-    print(f"User:     {args.user}")
+    print(f"User:     {user}  ({user_source})")
     print(f"Workers:  {args.workers}")
     print(f"Dry-run:  {args.dry_run}")
     print()
 
     # --- Phase 1: scan ---
     print("Step 1/4: scanning JSON manifests...")
-    refs = gather_all(source, args.user)
+    refs = gather_all(source, user)
     _print_scan_summary(refs)
 
     if not refs:

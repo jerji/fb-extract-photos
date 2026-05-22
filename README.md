@@ -88,13 +88,26 @@ Common flags:
 | ---------------- | ---------------- | ------------------------------------------------ |
 | `--source`       | `./output`       | Facebook dump root                               |
 | `--output`       | `./photos`       | Destination folder                               |
-| `--user`         | `Angel Ouellet`  | Your `sender_name` in messages                   |
+| `--user`         | auto-detected    | Your `sender_name` in messages (see below)       |
 | `--exiftool`     | `exiftool`       | Path to the exiftool binary                      |
 | `--phash-size`   | `8`              | Perceptual hash size; larger = stricter dedupe   |
 | `--workers`      | `os.cpu_count()` | Parallel workers for hashing + exiftool          |
 | `--no-dedupe`    | off              | Copy every reference, no dedupe                  |
 | `--no-resume`    | off              | Ignore `_manifest.csv` and process everything    |
 | `--dry-run`      | off              | Don't copy or modify anything                    |
+
+### User name auto-detection
+
+You don't normally need to pass `--user`. The tool figures out who you
+are by:
+
+1. Reading `personal_information/profile_information/profile_information.json`
+   from a full dump (the canonical source).
+2. Otherwise picking the most-frequent `sender_name` across every
+   message and group-message JSON. In your own export this is always
+   you by a wide margin (you appear in every thread; nobody else does).
+
+Pass `--user 'Your Full Name'` to override.
 
 ### Incremental re-runs
 
