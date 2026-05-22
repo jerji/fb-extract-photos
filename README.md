@@ -56,8 +56,22 @@ Common flags:
 | `--user`         | `Angel Ouellet`  | Your `sender_name` in messages                   |
 | `--exiftool`     | `exiftool`       | Path to the exiftool binary                      |
 | `--phash-size`   | `8`              | Perceptual hash size; larger = stricter dedupe   |
+| `--workers`      | `os.cpu_count()` | Parallel workers for hashing + exiftool          |
 | `--no-dedupe`    | off              | Copy every reference, no dedupe                  |
+| `--no-resume`    | off              | Ignore `_manifest.csv` and process everything    |
 | `--dry-run`      | off              | Don't copy or modify anything                    |
+
+### Incremental re-runs
+
+Two state files are written next to your output:
+
+- `photos/_manifest.csv` — one row per copied file (`dedupe_key`, `timestamp`,
+  `kind`, `origin`, `source`, `dest`). On the next run, any `dedupe_key`
+  already in this file is skipped.
+- `photos/.hash_cache.json` — keyed by source path → (`mtime`, `size`, `key`).
+  Unchanged source files are not re-hashed.
+
+So a re-run after extending the dump only does work for the new files.
 
 ## Output
 
