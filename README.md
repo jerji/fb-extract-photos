@@ -1,5 +1,7 @@
 # fb-extract-photos
 
+[github.com/jerji/fb-extract-photos](https://github.com/jerji/fb-extract-photos)
+
 Extract the photos, videos, and GIFs that **you** sent or uploaded from a
 Facebook data dump, restore creation-time EXIF metadata, and lay them out
 under `photos/YYYY/MM/`. Duplicates are collapsed by perceptual hash for
@@ -27,10 +29,39 @@ uploaded yourself (albums, posts, uncategorized):
 
 ## Install
 
+### With [`uv`](https://docs.astral.sh/uv/) (no install needed)
+
+Run the latest version straight from GitHub — `uvx` handles the venv and
+deps transparently:
+
 ```bash
+uvx --from git+https://github.com/jerji/fb-extract-photos \
+    fb-extract-photos --source ./output --output ./photos
+```
+
+Or install it as a persistent tool on your `PATH`:
+
+```bash
+uv tool install git+https://github.com/jerji/fb-extract-photos
+fb-extract-photos --help
+```
+
+### With `pip`
+
+From a clone:
+
+```bash
+git clone https://github.com/jerji/fb-extract-photos.git
+cd fb-extract-photos
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
+```
+
+Or directly from GitHub:
+
+```bash
+pip install git+https://github.com/jerji/fb-extract-photos.git
 ```
 
 ## Usage
@@ -100,3 +131,8 @@ Each file gets:
 ## License
 
 MIT.
+
+## Bugs / contributions
+
+Issues and pull requests welcome at
+<https://github.com/jerji/fb-extract-photos>.
