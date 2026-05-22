@@ -33,18 +33,24 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-Or without installing:
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install Pillow ImageHash
-.venv/bin/python extract_photos.py --help
-```
-
 ## Usage
 
 ```bash
 fb-extract-photos --source ./output --output ./photos
+# or:
+python -m fb_extract_photos --source ./output --output ./photos
+```
+
+## Layout
+
+```
+fb_extract_photos/
+  cli.py        # arg parsing + the 4-phase pipeline
+  scanners.py   # JSON manifest parsers + metadata extraction
+  hashing.py    # phash / sha256 dedup with persistent cache
+  exif.py       # ExifToolDaemon (-stay_open) + EXIF arg builder
+  output.py     # destination paths + manifest reader
+  types.py      # MediaRef, RawMedia, type aliases, constants
 ```
 
 Common flags:

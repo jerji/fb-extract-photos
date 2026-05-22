@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fb-extract-photos"
-version = "0.2.0"
+version = "0.3.0"
 description = "Extract photos/videos/GIFs you sent or uploaded from a Facebook data dump, restore EXIF timestamps, and dedupe by perceptual hash."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,13 +26,13 @@ dependencies = [
 ]
 
 [project.scripts]
-fb-extract-photos = "extract_photos:main"
+fb-extract-photos = "fb_extract_photos.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/jerji/fb-extract-photos"
 
 [tool.hatch.build.targets.wheel]
-only-include = ["extract_photos.py"]
+packages = ["fb_extract_photos"]
 
 [tool.hatch.build.targets.sdist]
-include = ["extract_photos.py", "README.md", "pyproject.toml"]
+include = ["fb_extract_photos", "README.md", "pyproject.toml"]
