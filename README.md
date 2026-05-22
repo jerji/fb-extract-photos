@@ -1,7 +1,5 @@
 # fb-extract-photos
 
-[github.com/jerji/fb-extract-photos](https://github.com/jerji/fb-extract-photos)
-
 Extract the photos, videos, and GIFs that **you** sent or uploaded from a
 Facebook data dump, restore creation-time EXIF metadata, and lay them out
 under `photos/YYYY/MM/`. Duplicates are collapsed by perceptual hash for
