@@ -20,11 +20,24 @@ from pathlib import Path
 
 from .types import (
     ExifTags,
+    MediaKind,
     MediaRef,
     RawMedia,
     Timestamp,
     classify,
     normalize_timestamp,
+)
+
+
+# Which media-list keys appear under each Facebook message JSON, and
+# the default kind to assign if the file's extension doesn't classify.
+# These two lists exhaust everything we've seen in real exports.
+_MESSAGE_MEDIA_LISTS: tuple[tuple[str, MediaKind], ...] = (
+    ("photos", "photo"),
+    ("videos", "video"),
+    ("gifs", "gif"),
+    ("audio_files", "audio"),
+    ("files", "file"),
 )
 
 
@@ -146,7 +159,12 @@ def _safe_load(json_path: Path) -> object | None:
 def collect_from_message_thread(
     json_path: Path, user_name: str
 ) -> list[RawMedia]:
-    """Collect media YOU sent in one ``message_*.json`` thread file."""
+    """Collect media YOU sent in one ``message_*.json`` thread file.
+
+    Covers all 5 attachment kinds Facebook puts on a message:
+    ``photos``, ``videos``, ``gifs``, ``audio_files``, ``files``.
+    The ``share`` key (link previews) is intentionally ignored.
+    """
     data = _safe_load(json_path)
     if not isinstance(data, dict):
         return []
@@ -160,13 +178,14 @@ def collect_from_message_thread(
             continue
         ts_ms = msg.get("timestamp_ms")
         fallback = normalize_timestamp(ts_ms) if ts_ms else None
-        # `photos`, `videos`, `gifs` all share the same item shape.
-        for key in ("photos", "videos", "gifs"):
+        for key, default_kind in _MESSAGE_MEDIA_LISTS:
             for item in msg.get(key) or []:
                 if not isinstance(item, dict):
                     continue
                 for uri, ts, extra in iter_media_from_obj(item, fallback):
-                    results.append(RawMedia(uri, ts, f"msg:{origin}", extra))
+                    results.append(RawMedia(
+                        uri, ts, f"msg:{origin}", extra, default_kind,
+                    ))
     return results
 
 
@@ -179,7 +198,7 @@ def collect_from_posts_uncategorized(json_path: Path) -> list[RawMedia]:
     for item in data.get("other_photos_v2") or []:
         if isinstance(item, dict):
             for uri, ts, extra in iter_media_from_obj(item, None):
-                out.append(RawMedia(uri, ts, "uncategorized", extra))
+                out.append(RawMedia(uri, ts, "uncategorized", extra, "photo"))
     return out
 
 
@@ -200,7 +219,9 @@ def collect_from_posts_timeline(json_path: Path) -> list[RawMedia]:
                 media = entry.get("media") if isinstance(entry, dict) else None
                 if isinstance(media, dict):
                     for uri, ts, extra in iter_media_from_obj(media, fallback):
-                        out.append(RawMedia(uri, ts, "post", extra))
+                        # Posts contain mixed photo/video; classify will
+                        # disambiguate from the file extension.
+                        out.append(RawMedia(uri, ts, "post", extra, "photo"))
     return out
 
 
@@ -216,11 +237,11 @@ def collect_from_album(json_path: Path) -> list[RawMedia]:
     for item in data.get("photos") or []:
         if isinstance(item, dict):
             for uri, ts, extra in iter_media_from_obj(item, None):
-                out.append(RawMedia(uri, ts, tag, extra))
+                out.append(RawMedia(uri, ts, tag, extra, "photo"))
     cover = data.get("cover_photo")
     if isinstance(cover, dict):
         for uri, ts, extra in iter_media_from_obj(cover, None):
-            out.append(RawMedia(uri, ts, tag, extra))
+            out.append(RawMedia(uri, ts, tag, extra, "photo"))
     return out
 
 
@@ -238,30 +259,7 @@ def collect_from_your_videos(json_path: Path) -> list[RawMedia]:
         for item in data.get(key) or []:
             if isinstance(item, dict):
                 for uri, ts, extra in iter_media_from_obj(item, None):
-                    out.append(RawMedia(uri, ts, "your_videos", extra))
-    return out
-
-
-def collect_from_tagged_in(json_path: Path) -> list[RawMedia]:
-    """Collect from ``activity_you're_tagged_in/*.json``.
-
-    In practice these files reference facebook.com URLs only, so
-    nothing local gets found — but we scan anyway in case a future
-    export shape includes local files.
-    """
-    data = _safe_load(json_path)
-    if not isinstance(data, list):
-        return []
-    out: list[RawMedia] = []
-    for entry in data:
-        if not isinstance(entry, dict):
-            continue
-        ts = entry.get("timestamp")
-        fallback = normalize_timestamp(ts) if ts else None
-        for m in entry.get("media") or []:
-            if isinstance(m, dict):
-                for uri, t, extra in iter_media_from_obj(m, fallback):
-                    out.append(RawMedia(uri, t, "tagged_in", extra))
+                    out.append(RawMedia(uri, ts, "your_videos", extra, "video"))
     return out
 
 
@@ -458,11 +456,8 @@ def gather_all(source_root: Path, user_name: str) -> list[MediaRef]:
         if p.exists():
             raw.extend(collect_from_posts_timeline(p))
 
-    # --- Tagged-in (URL-only in practice) ---
-    tagged_dir = activity / "activity_you're_tagged_in"
-    if tagged_dir.exists():
-        for p in tagged_dir.glob("*.json"):
-            raw.extend(collect_from_tagged_in(p))
+    # NOTE: activity_you're_tagged_in/ is intentionally skipped — those
+    # JSON files only contain facebook.com URLs, never local files.
 
     # --- Resolve + classify + dedupe-by-path ---
     seen: dict[Path, MediaRef] = {}
@@ -472,7 +467,10 @@ def gather_all(source_root: Path, user_name: str) -> list[MediaRef]:
         if candidate is None:
             missing += 1
             continue
-        kind = classify(candidate)
+        # Prefer extension-based classification; if the file has no
+        # recognised extension (rare — extensionless attachments under
+        # `audio/` or `files/`), trust the JSON list hint instead.
+        kind = classify(candidate) or r.default_kind
         if kind is None:
             continue
         existing = seen.get(candidate)

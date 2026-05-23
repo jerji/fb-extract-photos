@@ -11,16 +11,18 @@ import csv
 from datetime import datetime
 from pathlib import Path
 
-from .types import MediaRef
+from .types import KIND_SUBFOLDER, MediaRef
 
 
 def safe_dest(out_root: Path, ref: MediaRef) -> Path:
-    """Pick a unique destination path under ``out_root/YYYY/MM/``.
+    """Pick a unique destination path under ``out_root/<kind>/YYYY/MM/``.
 
-    The folder is created if missing. If the chosen filename already
-    exists (rare — only happens when two distinct dedup keys happen to
-    share a basename), we suffix ``_1``, ``_2``, … until we find a
-    free slot.
+    The ``<kind>`` segment comes from :data:`KIND_SUBFOLDER` —
+    photos/videos/GIFs share ``photos/``, audio attachments land in
+    ``audio/``, and everything else in ``files/``. The folder is
+    created if missing. If the chosen filename already exists (rare —
+    only when two distinct dedup keys happen to share a basename) we
+    suffix ``_1``, ``_2``, … until we find a free slot.
 
     .. note::
        This function is **not** safe to call from multiple threads
@@ -30,7 +32,8 @@ def safe_dest(out_root: Path, ref: MediaRef) -> Path:
        the result to reserve the slot.
     """
     dt = datetime.fromtimestamp(ref.timestamp)
-    folder = out_root / f"{dt.year:04d}" / f"{dt.month:02d}"
+    subfolder = KIND_SUBFOLDER[ref.kind]
+    folder = out_root / subfolder / f"{dt.year:04d}" / f"{dt.month:02d}"
     folder.mkdir(parents=True, exist_ok=True)
 
     candidate = folder / ref.source.name

@@ -21,20 +21,46 @@ Timestamp: TypeAlias = int
 #: time, so any type that has a sensible ``str()`` is fine.
 ExifTags: TypeAlias = dict[str, object]
 
-#: One of the three kinds of media we copy.
-MediaKind: TypeAlias = Literal["photo", "gif", "video"]
+#: Kind of asset extracted. "photo"/"gif"/"video" get EXIF written;
+#: "audio"/"file" only get the file copied with their mtime set.
+MediaKind: TypeAlias = Literal["photo", "gif", "video", "audio", "file"]
+
+#: Which kinds count as "media" (photos/videos/GIFs) vs. attachments
+#: (audio, generic files). Drives the ``--only-media`` filter.
+MEDIA_KINDS: Final[frozenset[str]] = frozenset({"photo", "gif", "video"})
+
+#: Maps each kind to the output subfolder it lands in (under the
+#: user's ``--output`` root). Photos/videos/GIFs share the
+#: ``photos/`` tree; audio and files get their own.
+KIND_SUBFOLDER: Final[dict[str, str]] = {
+    "photo": "photos",
+    "gif": "photos",
+    "video": "photos",
+    "audio": "audio",
+    "file": "files",
+}
 
 
 # ---- File-extension classification ------------------------------------------
+#
+# Lists are based on a full crawl of a 47 GB Facebook export (81 k files,
+# 34 chunked zips). Anything not in any set falls back to the kind hint
+# from the JSON list the file came from (``audio_files`` -> audio,
+# ``files`` -> file).
 
-PHOTO_EXT: Final[frozenset[str]] = frozenset(
-    {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
-)
+PHOTO_EXT: Final[frozenset[str]] = frozenset({
+    ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif",
+    ".nef",   # Nikon RAW (camera dumps occasionally show up)
+})
 GIF_EXT: Final[frozenset[str]] = frozenset({".gif"})
-VIDEO_EXT: Final[frozenset[str]] = frozenset(
-    {".mp4", ".mov", ".m4v", ".3gp", ".webm", ".gifv"}
-)
-ALL_EXT: Final[frozenset[str]] = PHOTO_EXT | GIF_EXT | VIDEO_EXT
+VIDEO_EXT: Final[frozenset[str]] = frozenset({
+    ".mp4", ".mov", ".m4v", ".3gp", ".webm", ".gifv",
+    ".wmv",   # legacy Windows video, found in older dumps
+})
+AUDIO_EXT: Final[frozenset[str]] = frozenset({
+    ".aac", ".mp3", ".m4a", ".wav", ".ogg", ".opus", ".flac", ".mid",
+})
+ALL_EXT: Final[frozenset[str]] = PHOTO_EXT | GIF_EXT | VIDEO_EXT | AUDIO_EXT
 
 
 # ---- Output-folder side files -----------------------------------------------
@@ -55,12 +81,25 @@ class RawMedia(NamedTuple):
     Source-path resolution and on-disk classification happen later (in
     :func:`fb_extract_photos.scanners.gather_all`), so this record only
     carries what we can know from the JSON alone.
+
+    Attributes
+    ----------
+    uri / timestamp / origin / extra_exif:
+        Same meaning as on :class:`MediaRef`.
+    default_kind:
+        The kind we'd assign if the file's extension is unknown.
+        Determined by which JSON list the entry came from:
+        ``photos`` → ``"photo"``, ``audio_files`` → ``"audio"``,
+        ``files`` → ``"file"``, etc. Trusted only when the on-disk
+        extension fails to classify (rare; mostly the extensionless
+        attachments Facebook stores in ``audio/`` or ``files/``).
     """
 
     uri: str
     timestamp: Timestamp
     origin: str
     extra_exif: ExifTags
+    default_kind: MediaKind
 
 
 @dataclass
@@ -103,7 +142,11 @@ class MediaRef:
 
 def classify(path: Path) -> MediaKind | None:
     """Map a path's extension to a :data:`MediaKind`, or ``None`` if the
-    extension isn't one we handle."""
+    extension isn't recognised.
+
+    Callers should fall back to :attr:`RawMedia.default_kind` when this
+    returns ``None`` (and treat as truly unknown only if both are None).
+    """
     ext = path.suffix.lower()
     if ext in PHOTO_EXT:
         return "photo"
@@ -111,6 +154,8 @@ def classify(path: Path) -> MediaKind | None:
         return "gif"
     if ext in VIDEO_EXT:
         return "video"
+    if ext in AUDIO_EXT:
+        return "audio"
     return None
 
 

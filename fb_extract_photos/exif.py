@@ -106,17 +106,25 @@ class ExifToolDaemon:
             self.proc.kill()
 
 
-def build_exif_args(ref: MediaRef, dest: Path) -> list[str]:
-    """Construct the exiftool argument list for one media file.
+def build_exif_args(ref: MediaRef, dest: Path) -> list[str] | None:
+    """Construct the exiftool argument list for one media file, or
+    return ``None`` if this kind doesn't get EXIF.
 
-    Always written: ``DateTimeOriginal``, ``CreateDate``, ``ModifyDate``,
-    ``FileModifyDate``, ``FileCreateDate``. For videos we also write
-    the QuickTime container atoms so Photos apps that read them (e.g.
-    Apple Photos for .mov / .mp4) get the right capture date.
+    For ``audio`` and ``file`` kinds the format diversity is too wide
+    (mp3, pdf, docx, mid, …) to write meaningful EXIF safely — we just
+    set the filesystem mtime later instead and skip exiftool entirely.
 
-    ``ref.extra_exif`` is appended verbatim — that's where GPS / camera
-    tags pulled out of ``media_metadata.exif_data`` end up.
+    For photos/GIFs/videos we always write: ``DateTimeOriginal``,
+    ``CreateDate``, ``ModifyDate``, ``FileModifyDate``,
+    ``FileCreateDate``. Videos additionally get QuickTime atoms so
+    Apple Photos and friends pick them up.
+
+    ``ref.extra_exif`` is appended verbatim — that's where GPS /
+    camera tags pulled out of ``media_metadata.exif_data`` end up.
     """
+    if ref.kind in ("audio", "file"):
+        return None
+
     stamp = datetime.fromtimestamp(ref.timestamp).strftime("%Y:%m:%d %H:%M:%S")
 
     args: list[str] = []

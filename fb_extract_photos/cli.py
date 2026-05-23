@@ -10,6 +10,10 @@ The four phases are:
    keys already recorded in the manifest. (:mod:`hashing`, :mod:`output`)
 4. **Copy + EXIF** — copy each unique file to ``YYYY/MM/`` and write
    EXIF via a pool of long-lived exiftool daemons. (:mod:`exif`)
+
+``activity_you're_tagged_in/`` is intentionally not scanned: in every
+export shape I've seen, those entries are facebook.com URLs with no
+local media — scanning produces nothing and just wastes IO.
 """
 
 from __future__ import annotations
@@ -143,11 +147,16 @@ def _run_copy_phase(
         except OSError as e:
             return ("err", ref, f"copy: {e}")
 
-        daemon = daemon_pool.get()
-        try:
-            daemon.run(build_exif_args(ref, dest))
-        finally:
-            daemon_pool.put(daemon)
+        # Audio + generic files get no EXIF (build_exif_args returns
+        # None). Skip the daemon round-trip entirely; the mtime set
+        # below is the only timestamp metadata they carry.
+        exif_args = build_exif_args(ref, dest)
+        if exif_args is not None:
+            daemon = daemon_pool.get()
+            try:
+                daemon.run(exif_args)
+            finally:
+                daemon_pool.put(daemon)
 
         try:
             os.utime(dest, (ref.timestamp, ref.timestamp))
@@ -290,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         print("\nStep 4/4: (dry-run) would copy:")
-        for k, r in unique[:10]:
+        for _, r in unique[:10]:
             dt = datetime.fromtimestamp(r.timestamp)
             gps = " +GPS" if "GPSLatitude" in r.extra_exif else ""
             print(
