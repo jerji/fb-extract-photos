@@ -113,7 +113,8 @@ def iter_media_from_obj(
     so callers can ``.extend()`` cleanly when iterating arrays.
     """
     uri = obj.get("uri")
-    if not isinstance(uri, str) or uri.startswith(("http://", "https://")):
+    if (not isinstance(uri, str) or not uri.strip()
+            or uri.startswith(("http://", "https://"))):
         return []
     extra, taken = extract_metadata(obj)
     # Prefer the actual capture time over the upload time.
@@ -382,14 +383,19 @@ _ALT_EXTS: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4")
 
 
 def _resolve_candidate(source_root: Path, uri: str) -> Path | None:
-    """Resolve a JSON URI to an existing on-disk path, probing common
-    alternate extensions if the literal path is missing."""
+    """Resolve a JSON URI to an existing on-disk *file*, probing common
+    alternate extensions if the literal path is missing.
+
+    We require ``is_file()`` (not just ``exists()``) because a URI can
+    occasionally point at a directory — e.g. an empty / malformed URI
+    that resolves back to the source root.
+    """
     candidate = (source_root / uri).resolve()
-    if candidate.exists():
+    if candidate.is_file():
         return candidate
     for alt in _ALT_EXTS:
         c = candidate.with_suffix(alt)
-        if c.exists():
+        if c.is_file():
             return c
     return None
 
