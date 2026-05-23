@@ -36,7 +36,13 @@ from .exif import ExifToolDaemon, build_exif_args
 from .hashing import dedupe, hash_refs
 from .output import load_manifest_keys, safe_dest
 from .scanners import detect_user_name, gather_all
-from .types import CACHE_NAME, MANIFEST_HEADERS, MANIFEST_NAME, MediaRef
+from .types import (
+    CACHE_NAME,
+    MANIFEST_HEADERS,
+    MANIFEST_NAME,
+    MEDIA_KINDS,
+    MediaRef,
+)
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -66,6 +72,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--workers", type=int, default=default_workers,
                     help="Parallel workers for hashing + exiftool "
                          f"(default: {default_workers})")
+    ap.add_argument("--only-media", action="store_true",
+                    help="Skip audio attachments and generic file "
+                         "attachments (pdf, docx, mp3, …). Keep only "
+                         "photos, GIFs, and videos.")
     ap.add_argument("--no-dedupe", action="store_true",
                     help="Copy every referenced file, no dedupe")
     ap.add_argument("--no-resume", action="store_true",
@@ -250,6 +260,14 @@ def main(argv: list[str] | None = None) -> int:
     # --- Phase 1: scan ---
     print("Step 1/4: scanning JSON manifests...")
     refs = gather_all(source, user)
+
+    if args.only_media:
+        before = len(refs)
+        refs = [r for r in refs if r.kind in MEDIA_KINDS]
+        if before != len(refs):
+            print(f"  --only-media: dropped {before - len(refs)} "
+                  f"audio/file attachments")
+
     _print_scan_summary(refs)
 
     if not refs:
