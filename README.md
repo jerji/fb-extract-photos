@@ -18,7 +18,24 @@ uploaded yourself (albums, posts, uncategorized):
 - `posts/album/*.json`
 - `posts/your_videos.json`
 - `posts/birthday_media.json`
-- `activity_you're_tagged_in/*.json` (URL-only in practice; no local files)
+
+`activity_you're_tagged_in/*.json` is intentionally **not** scanned —
+its entries are facebook.com URLs with no local files in any export
+shape I've seen.
+
+## Output layout
+
+```
+<output>/
+  photos/YYYY/MM/   # jpg, png, webp, heic, nef, gif, mp4, mov, webm, wmv, …
+  audio/YYYY/MM/    # mp3, aac, m4a, ogg, opus, flac, mid, …
+  files/YYYY/MM/    # pdf, docx, xlsx, txt, stl, csv, … (anything else)
+  _manifest.csv
+  .hash_cache.json
+```
+
+Pass `--only-media` to keep just `photos/` (skips audio attachments
+and document files).
 
 ## Requirements
 
@@ -92,6 +109,7 @@ Common flags:
 | `--exiftool`     | `exiftool`       | Path to the exiftool binary                      |
 | `--phash-size`   | `8`              | Perceptual hash size; larger = stricter dedupe   |
 | `--workers`      | `os.cpu_count()` | Parallel workers for hashing + exiftool          |
+| `--only-media`   | off              | Skip audio/file attachments; photos+videos only  |
 | `--no-dedupe`    | off              | Copy every reference, no dedupe                  |
 | `--no-resume`    | off              | Ignore `_manifest.csv` and process everything    |
 | `--dry-run`      | off              | Don't copy or modify anything                    |
